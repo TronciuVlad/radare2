@@ -132,7 +132,7 @@ static bool xnu_thread_set_drx(RDebug *dbg, xnu_thread_t *thread) {
 static bool xnu_thread_set_gpr(RDebug *dbg, xnu_thread_t *thread) {
 	r_return_val_if_fail (dbg && thread, false);
 	kern_return_t rc;
-	R_REG_T *regs = (R_REG_T *)&thread->gpr;
+	R_REG_T *regs = &thread->gpr;
 	if (!regs) {
 		return false;
 	}
@@ -150,17 +150,46 @@ static bool xnu_thread_set_gpr(RDebug *dbg, xnu_thread_t *thread) {
 		regs->tsh.count  = x86_THREAD_STATE32_COUNT;
 	}
 #elif __arm64 || __aarch64 || __arm64__ || __aarch64__
-#if 0
-	/* unified doesnt seems to work */
-	thread->flavor = ARM_UNIFIED_THREAD_STATE;
-	thread->count = ARM_UNIFIED_THREAD_STATE_COUNT;
-#endif
-	//thread->state = &regs->uts;
-	thread->state = &regs;
+	// regs = &thread->state;
+	thread->state = regs; // &regs->uts;
+	// regs = (R_REG_T*)&regs->arm64;
+	// thread->state = regs;
 	if (dbg->bits == R_SYS_BITS_64) {
-		thread->flavor = ARM_THREAD_STATE64;
-		thread->count = ARM_THREAD_STATE64_COUNT;
-		thread->state_size = sizeof (arm_thread_state64_t);
+#if 0
+		arm_unified_thread_state_t *th = regs;
+		thread->flavor = ARM_THREAD_STATE64; // UNIFIED_THREAD_STATE;
+		thread->count = ARM_THREAD_STATE64_COUNT; // UNIFIED_THREAD_STATE_COUNT;
+		thread->state_size = 272; // sizeof (*th);
+#else
+		arm_thread_state64_t ts64 = {0};	
+		// ts64.__opaque_pc = 123;
+		ts64.__sp = 123;
+		ts64.__pc = 123;
+		ts64.__fp = 123;
+		ts64.__lr = 123;
+		int i;
+		for (i = 0; i< 8; i++) {
+		ts64.__x[i] = 123;
+		}
+		memset (&ts64.v, 0, sizeof (ts64.v));
+		thread->flavor = ARM_UNIFIED_THREAD_STATE;
+		thread->count = ARM_UNIFIED_THREAD_STATE_COUNT;
+		thread->state_size = 280; // sizeof (*th);
+	///	thread->state_size = sizeof (R_REG_T); // sizeof (R_REG_T); // sizeof (arm_thread_state64_t);
+#endif
+		eprintf ("PORT %d\n", thread->port);
+		eprintf ("SIZE %d\n", thread->state_size);
+		rc = thread_set_state (thread->port, thread->flavor,
+				       &ts64, // ->ts_64,
+				       // (thread_state_t)regs, // &thread->debug.tsh.gpr,
+				       thread->count);
+		if (rc != KERN_SUCCESS) {
+			r_sys_perror (__FUNCTION__);
+			eprintf ("rc=%d\n", rc);
+			thread->count = 0;
+			return false;
+		}
+		return true;
 	} else {
 		thread->flavor = ARM_THREAD_STATE32;
 		thread->count = ARM_THREAD_STATE32_COUNT;
@@ -198,6 +227,7 @@ static bool xnu_thread_get_gpr(RDebug *dbg, xnu_thread_t *thread) {
 		thread->flavor = ARM_THREAD_STATE64;
 		thread->count = ARM_THREAD_STATE64_COUNT;
 		thread->state_size = sizeof (arm_thread_state64_t);
+		eprintf ("SIZE %d\n", thread->state_size);
 	} else {
 		thread->flavor = ARM_THREAD_STATE;
 		thread->count = ARM_THREAD_STATE_COUNT;
@@ -216,8 +246,10 @@ static bool xnu_thread_get_gpr(RDebug *dbg, xnu_thread_t *thread) {
 				     sizeof (x86_thread_state64_t) :
 				     sizeof (x86_thread_state32_t);
 #endif
+		eprintf ("rPORT %d\n", thread->port);
 	rc = thread_get_state (thread->port, thread->flavor,
 			       (thread_state_t)regs, &thread->count);
+	printf ("--> count=%d size=%d\n", thread->count, thread->state_size);
 	if (rc != KERN_SUCCESS) {
 		r_sys_perror (__FUNCTION__);
 		thread->count = 0;

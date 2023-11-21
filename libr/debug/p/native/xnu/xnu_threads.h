@@ -16,11 +16,13 @@
 #	endif
 typedef union r_xnu_arm_reg_state_t {
 	// which one is used here is determined by RzXnuDebug.cpu
-	arm_thread_state32_t arm32;
-	arm_thread_state64_t arm64;
+//	arm_thread_state32_t arm32;
+//	arm_thread_state64_t arm64;
 } RXnuArmRegState;
 #undef R_REG_T
-#define R_REG_T        RXnuArmRegState
+// #define R_REG_T        RXnuArmRegState
+// typedef struct arm_unified_thread_state arm_unified_thread_state_t;
+#	define R_REG_T arm_unified_thread_state_t
 #elif __arm || __arm__
 #undef R_REG_T
 #	define R_REG_T arm_unified_thread_state_t

@@ -476,7 +476,9 @@ bool xnu_reg_write(RDebug *dbg, int type, const ut8 *buf, int size) {
 #if __x86_64__ || __i386__
 		memcpy (&th->gpr.uts, buf, buf_size);
 #else
-		memcpy (&th->gpr, buf, buf_size);
+		memcpy (&th->gpr.uts, buf, buf_size);
+		// th->state =buf;
+		// memcpy (&th->state, buf, buf_size);
 #endif
 #endif
 		}
@@ -624,8 +626,10 @@ static void xnu_free_threads_ports(RDebugPid *p) {
 
 RList *xnu_thread_list(RDebug *dbg, int pid, RList *list) {
 #if __arm64__ || __aarch_64__
+	//#define CPU_PC (dbg->bits == R_SYS_BITS_64) ? \
+	//	state.arm64.__pc : state.arm32.__pc
 	#define CPU_PC (dbg->bits == R_SYS_BITS_64) ? \
-		state.arm64.__pc : state.arm32.__pc
+		state.ts_64.__pc : state.ts_32.__pc
 #elif __arm__ || __arm
 	#define CPU_PC (dbg->bits == R_SYS_BITS_64) ? \
 		state.ts_64.__pc : state.ts_32.__pc
