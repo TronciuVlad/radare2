@@ -1,6 +1,7 @@
 /* radare - LGPL - Copyright 2009-2022 - pancake */
 
 #include <r_userconf.h>
+#include <sys/sysctl.h>
 #if DEBUGGER
 
 // TODO much work remains to be done
@@ -161,7 +162,9 @@ static bool xnu_thread_set_gpr(RDebug *dbg, xnu_thread_t *thread) {
 		thread->count = ARM_THREAD_STATE64_COUNT; // UNIFIED_THREAD_STATE_COUNT;
 		thread->state_size = 272; // sizeof (*th);
 #else
-		arm_thread_state64_t ts64 = {0};	
+		// arm_thread_state64_t ts64 = {0};
+		thread_state_t ts64 = (thread_state_t)regs;
+#if 0
 		// ts64.__opaque_pc = 123;
 		ts64.__sp = 123;
 		ts64.__pc = 123;
@@ -172,15 +175,56 @@ static bool xnu_thread_set_gpr(RDebug *dbg, xnu_thread_t *thread) {
 		ts64.__x[i] = 123;
 		}
 		memset (&ts64.v, 0, sizeof (ts64.v));
-		thread->flavor = ARM_UNIFIED_THREAD_STATE;
-		thread->count = ARM_UNIFIED_THREAD_STATE_COUNT;
-		thread->state_size = 280; // sizeof (*th);
+		/// 
+		ensure(thread_convert_thread_state(*threads, THREAD_CONVERT_THREAD_STATE_TO_SELF, flavor, reinterpret_cast<thread_state_t>(&state), count, reinterpret_cast<thread_state_t>(&state), &count) == KERN_SUCCESS);
+		auto sp = rearrange_stack(task, library, arm_thread_state64_get_sp(state));
+		arm_thread_state64_set_sp(state, sp);
+		patch_restrictions(task, arm_thread_state64_get_pc(state));
+		ensure(thread_convert_thread_state(*threads, THREAD_CONVERT_THREAD_STATE_FROM_SELF, flavor, reinterpret_cast<thread_state_t>(&state), count, reinterpret_cast<thread_state_t>(&state), &count) == KERN_SUCCESS);
+
+#endif
+	// 	thread->count = ARM_UNIFIED_THREAD_STATE_COUNT;
+		thread->count = ARM_THREAD_STATE64_COUNT; // UNIFIED_THREAD_STATE_COUNT;
+		thread->flavor = ARM_THREAD_STATE64_COUNT;
+		ut32 count = thread->count;
+		eprintf ("COUNT %d\n", count);
+		// TOSELF
+		{
+			rc = thread_convert_thread_state (
+				thread->port,
+				THREAD_CONVERT_THREAD_STATE_TO_SELF,
+				thread->flavor,
+				ts64, count,
+				ts64, &count);
+			if (rc == KERN_SUCCESS) {
+				R_LOG_INFO ("convert works");
+			} else {
+				R_LOG_WARN ("failed to convert %d", rc);
+			}
+		}
+
+		// FROMSELF
+		{
+			rc = thread_convert_thread_state (
+				thread->port,
+				THREAD_CONVERT_THREAD_STATE_FROM_SELF,
+				thread->flavor,
+				ts64, count,
+				ts64, &count);
+			if (rc == KERN_SUCCESS) {
+				R_LOG_INFO ("convert works");
+			} else {
+				R_LOG_WARN ("failed to convert %d", rc);
+			}
+		}
+
+		// thread->flavor = ARM_UNIFIED_THREAD_STATE;
+		// thread->count = ARM_UNIFIED_THREAD_STATE_COUNT;
+		thread->state_size = sizeof (arm_thread_state64_t);
 	///	thread->state_size = sizeof (R_REG_T); // sizeof (R_REG_T); // sizeof (arm_thread_state64_t);
 #endif
-		eprintf ("PORT %d\n", thread->port);
-		eprintf ("SIZE %d\n", thread->state_size);
 		rc = thread_set_state (thread->port, thread->flavor,
-				       &ts64, // ->ts_64,
+				       ts64, // ->ts_64,
 				       // (thread_state_t)regs, // &thread->debug.tsh.gpr,
 				       thread->count);
 		if (rc != KERN_SUCCESS) {
@@ -227,7 +271,6 @@ static bool xnu_thread_get_gpr(RDebug *dbg, xnu_thread_t *thread) {
 		thread->flavor = ARM_THREAD_STATE64;
 		thread->count = ARM_THREAD_STATE64_COUNT;
 		thread->state_size = sizeof (arm_thread_state64_t);
-		eprintf ("SIZE %d\n", thread->state_size);
 	} else {
 		thread->flavor = ARM_THREAD_STATE;
 		thread->count = ARM_THREAD_STATE_COUNT;
@@ -246,10 +289,8 @@ static bool xnu_thread_get_gpr(RDebug *dbg, xnu_thread_t *thread) {
 				     sizeof (x86_thread_state64_t) :
 				     sizeof (x86_thread_state32_t);
 #endif
-		eprintf ("rPORT %d\n", thread->port);
 	rc = thread_get_state (thread->port, thread->flavor,
 			       (thread_state_t)regs, &thread->count);
-	printf ("--> count=%d size=%d\n", thread->count, thread->state_size);
 	if (rc != KERN_SUCCESS) {
 		r_sys_perror (__FUNCTION__);
 		thread->count = 0;

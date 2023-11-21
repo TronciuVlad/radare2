@@ -1228,7 +1228,7 @@ R_LOG_INFO ("modules.get");
 
 static bool r_debug_native_kill(RDebug *dbg, int pid, int tid, int sig) {
 	bool ret = false;
-	if (pid == 0) {
+	if (pid < 1) {
 		pid = dbg->pid;
 	}
 #if R2__WINDOWS__
@@ -1615,20 +1615,6 @@ static int r_debug_native_map_protect(RDebug *dbg, ut64 addr, int size, int perm
 static int r_debug_desc_native_open(const char *path) {
 	return 0;
 }
-
-#if 0
-static int r_debug_setup_ownership(int fd, RDebug *dbg) {
-	RDebugInfo *info = r_debug_info (dbg, NULL);
-
-	if (!info) {
-		R_LOG_ERROR ("getting debug info");
-		return -1;
-	}
-	fchown (fd, info->uid, info->gid);
-	r_debug_info_free (info);
-  	return 0;
-}
-#endif
 
 static bool r_debug_gcore(RDebug *dbg, RBuffer *dest) {
 #if __APPLE__
