@@ -664,7 +664,9 @@ typedef struct FlagDef {
 	const char *name;
 } FlagDef;
 
-R_API void tcc_set_callback(TCCState *s, void (*cb)(const char *, char **), char **p) {
+typedef void (*TccCallback)(const char *, char **);
+
+R_API void tcc_set_callback(TCCState *s, TccCallback cb, char **p) {
 	if (cb) {
 		s->cb = cb;
 		s->cb_user_data = p;
