@@ -1814,6 +1814,9 @@ static void parse_number(TCCState *s1, const char *p) {
 		} else if (isnum (ch)) {
 			t = ch - '0';
 		} else {
+			if (ch == 'U' && !strcmp (p, "LL")) {
+				ch = 0;
+			}
 			break;
 		}
 		if (t >= b) {
@@ -1986,6 +1989,10 @@ float_frac_parse:
 			}
 		}
 	} else {
+		if (!strcmp (p, "LL")) {
+			p += 3;
+			q += 2;
+		}
 		ut64 n, n1;
 		int lcount, ucount;
 
