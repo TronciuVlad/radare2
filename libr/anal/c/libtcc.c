@@ -2,6 +2,7 @@
  *  TCC - Tiny C Compiler
  *
  *  Copyright (c) 2001-2004 Fabrice Bellard
+ *  Copyright (c) 2016-2024 pancake
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -60,7 +61,7 @@ R_API char *pstrncpy(char *out, const char *in, size_t num) {
 R_API char *tcc_basename(const char *name) {
 	char *p = strchr (name, 0);
 	while (p && p > name && !IS_DIRSEP (p[-1])) {
-		--p;
+		p--;
 	}
 	return p;
 }
@@ -79,13 +80,10 @@ R_API char *tcc_fileextension(const char *name) {
 /********************************************************/
 /* dynarrays */
 
-ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
-{
-	int nb, nb_alloc;
-	void **pp;
-
-	nb = *nb_ptr;
-	pp = *ptab;
+ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data) {
+	int nb_alloc;
+	int nb = *nb_ptr;
+	void **pp = *ptab;
 	/* every power of two we double array size */
 	if ((nb & (nb - 1)) == 0) {
 		if (!nb) {
@@ -100,8 +98,7 @@ ST_FUNC void dynarray_add(void ***ptab, int *nb_ptr, void *data)
 	*nb_ptr = nb;
 }
 
-ST_FUNC void dynarray_reset(void *pp, int *n)
-{
+ST_FUNC void dynarray_reset(void *pp, int *n) {
 	void **p;
 	for (p = *(void ***) pp; *n; p++, --*n) {
 		if (*p) {
@@ -192,9 +189,9 @@ static void error1(TCCState *s1, int is_warning, const char *fmt, va_list ap) {
 	}
 }
 
-LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque,
-				  void (*error_func)(void *opaque, const char *msg))
-{
+typedef void (*TccErrorCallback)(void *opaque, const char *msg);
+
+LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TccErrorCallback error_func) {
 	s->error_opaque = error_opaque;
 	s->error_func = error_func;
 }
@@ -374,8 +371,7 @@ LIBTCCAPI int tcc_compile_string(TCCState *s1, const char *str) {
 }
 
 /* define a preprocessor symbol. A value can also be provided with the '=' operator */
-LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *value)
-{
+LIBTCCAPI void tcc_define_symbol(TCCState *s1, const char *sym, const char *value) {
 	/* default value */
 	if (!value) {
 		value = "1";
@@ -558,21 +554,20 @@ LIBTCCAPI TCCState *tcc_new(const char *arch, int bits, const char *os) {
 		return NULL;
 	}
 	// tcc_cleanup (NULL); // wtf no globals anymore
-	TCCState *s = calloc (sizeof (TCCState), 1);
-	if (!s) {
-		return NULL;
+	TCCState *s = R_NEW0 (TCCState);
+	if (s) {
+		s->arch = strdup (arch);
+		s->bits = bits;
+		s->os = strdup (os);
+		s->anon_sym = SYM_FIRST_ANOM;
+		s->output_type = TCC_OUTPUT_MEMORY;
+		preprocess_new (s);
+		s->include_stack_ptr = s->include_stack;
 	}
-	s->arch = strdup (arch);
-	s->bits = bits;
-	s->os = strdup (os);
-	s->anon_sym = SYM_FIRST_ANOM;
-	s->output_type = TCC_OUTPUT_MEMORY;
-	preprocess_new (s);
-	s->include_stack_ptr = s->include_stack;
-
 	return s;
 }
 
+// TODO: rename to tcc_free
 LIBTCCAPI void tcc_delete(TCCState *s1) {
 	tcc_cleanup (s1);
 
@@ -588,18 +583,15 @@ LIBTCCAPI void tcc_delete(TCCState *s1) {
 	/* target config */
 	free (s1->arch);
 	free (s1->os);
-
 	free (s1);
 }
 
-LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname)
-{
+LIBTCCAPI int tcc_add_include_path(TCCState *s, const char *pathname) {
 	tcc_split_path (s, (void ***) &s->include_paths, &s->nb_include_paths, pathname);
 	return 0;
 }
 
-LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname)
-{
+LIBTCCAPI int tcc_add_sysinclude_path(TCCState *s, const char *pathname) {
 	tcc_split_path (s, (void ***) &s->sysinclude_paths, &s->nb_sysinclude_paths, pathname);
 	return 0;
 }
